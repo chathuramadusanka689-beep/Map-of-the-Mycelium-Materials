@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mycelium Materials Research Database</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- SheetJS for Excel parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        mycelium: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            200: '#bbf7d0',
+                            300: '#86efac',
+                            400: '#4ade80',
+                            500: '#22c55e',
+                            600: '#16a34a',
+                            700: '#15803d',
+                            800: '#166534',
+                            900: '#14532d',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.3s ease-out forwards;
+        }
+        
+        /* Table transitions */
+        .table-row {
+            transition: all 0.2s ease;
+        }
+        .table-row:hover {
+            transform: translateX(4px);
+        }
+        
+        /* Sort indicators */
+        .sort-icon {
+            transition: transform 0.2s;
+        }
+        .sort-asc .sort-icon {
+            transform: rotate(180deg);
+        }
+        .sort-desc .sort-icon {
+            transform: rotate(0deg);
+        }
+        
+        /* Highlight animation */
+        @keyframes highlight {
+            0% { background-color: rgba(34, 197, 94, 0.3); }
+            100% { background-color: transparent; }
+        }
+        .highlight-match {
+            animation: highlight 1s ease-out;
+            background-color: rgba(34, 197, 94, 0.2);
+            padding: 0 2px;
+            border-radius: 2px;
+            font-weight: 600;
+        }
+        
+        /* Glass effect for modal */
+        .glass {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+        }
+        .dark .glass {
+            background: rgba(15, 23, 42, 0.95);
+        }
+        
+        /* Custom checkbox */
+        .custom-checkbox {
+            appearance: none;
+            width: 1.25rem;
+            height: 1.25rem;
+            border: 2px solid #cbd5e1;
+            border-radius: 0.25rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .custom-checkbox:checked {
+            background-color: #16a34a;
+            border-color: #16a34a;
+        }
+        .custom-checkbox:checked::after {
+            content: '✓';
+            color: white;
+            display: block;
+            text-align: center;
+            font-size: 0.875rem;
+            line-height: 1.25rem;
+        }
+        
+        /* Drag and drop zone */
+        .drop-zone {
+            border: 3px dashed #cbd5e1;
+            transition: all 0.3s ease;
+        }
+        .drop-zone.dragover {
+            border-color: #16a34a;
+            background-color: rgba(22, 163, 74, 0.05);
+            transform: scale(1.02);
+        }
+    </style>
+</head>
+<body class="bg-gray-50 dark:bg-slate-900 text-gray-800 dark:text-gray-100 transition-colors duration-300 min-h-screen flex flex-col">
+    
+    <!-- Header -->
+    <header class="bg-white dark:bg-slate-800 shadow-lg sticky top-0 z-40 transition-colors duration-300">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <!-- Logo -->
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-gradient-to-br from-mycelium-400 to-mycelium-600 rounded-xl flex items-center justify-center shadow-lg">
+                        <i class="fas fa-leaf text-white text-lg"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold bg-gradient-to-r from-mycelium-600 to-mycelium-400 bg-clip-text text-transparent">
+                            Mycelium Materials
+                        </h1>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">Research Database</p>
+                    </div>
+                </div>
+                
+                <!-- Stats -->
+                <div class="hidden md:flex items-center space-x-6 text-sm">
+                    <div class="text-center">
+                        <span class="block font-bold text-mycelium-600 dark:text-mycelium-400" id="totalRecords">0</span>
+                        <span class="text-gray-500 dark:text-gray-400 text-xs">Records</span>
+                    </div>
+                    <div class="h-8 w-px bg-gray-200 dark:bg-gray-700"></div>
+                    <div class="text-center">
+                        <span class="block font-bold text-mycelium-600 dark:text-mycelium-400" id="uniqueAuthors">0</span>
+                        <span class="text-gray-500 dark:text-gray-400 text-xs">Authors</span>
+                    </div>
+                    <div class="h-8 w-px bg-gray-200 dark:bg-gray-700"></div>
+                    <div class="text-center">
+                        <span class="block font-bold text-mycelium-600 dark:text-mycelium-400" id="yearRange">-</span>
+                        <span class="text-gray-500 dark:text-gray-400 text-xs">Year Range</span>
+                    </div>
+                </div>
+                
+                <!-- Controls -->
+                <div class="flex items-center space-x-3">
+                    <button onclick="app.toggleTheme()" class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors" title="Toggle Theme">
+                        <i class="fas fa-moon dark:hidden text-gray-600"></i>
+                        <i class="fas fa-sun hidden dark:block text-yellow-400"></i>
+                    </button>
+                    <label class="cursor-pointer bg-mycelium-600 hover:bg-mycelium-700 text-white px-4 py-2 rounded-lg transition-all shadow-md hover:shadow-lg flex items-center space-x-2">
+                        <i class="fas fa-upload"></i>
+                        <span class="hidden sm:inline">Upload Excel</span>
+                        <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" class="hidden" onchange="app.handleFileUpload(event)">
+                    </label>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        <!-- Upload Zone (shown when no data) -->
+        <div id="uploadZone" class="drop-zone rounded-2xl p-12 text-center mb-8 bg-white dark:bg-slate-800 shadow-sm">
+            <div class="max-w-md mx-auto">
+                <div class="w-20 h-20 bg-mycelium-100 dark:bg-mycelium-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i class="fas fa-cloud-upload-alt text-3xl text-mycelium-600 dark:text-mycelium-400"></i>
+                </div>
+                <h3 class="text-xl font-semibold mb-2">Upload Research Data</h3>
+                <p class="text-gray-500 dark:text-gray-400 mb-6">
+                    Drag and drop your Excel file here, or click to browse. Supports .xlsx, .xls, and .csv files.
+                </p>
+                <div class="flex justify-center space-x-4 text-sm text-gray-400">
+                    <span class="flex items-center"><i class="fas fa-check text-mycelium-500 mr-2"></i>Auto-parse</span>
+                    <span class="flex items-center"><i class="fas fa-check text-mycelium-500 mr-2"></i>Local storage</span>
+                    <span class="flex items-center"><i class="fas fa-check text-mycelium-500 mr-2"></i>Instant search</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search & Filters -->
+        <div id="controlsSection" class="hidden space-y-4 mb-6">
+            <!-- Search Bar -->
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-4">
+                <div class="flex flex-col md:flex-row gap-4">
+                    <div class="flex-1 relative">
+                        <i class="fas fa-search absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                        <input type="text" id="searchInput" placeholder="Search by title, author, keywords..." 
+                            class="w-full pl-12 pr-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-slate-900 focus:ring-2 focus:ring-mycelium-500 focus:border-transparent transition-all"
+                            oninput="app.handleSearch(this.value)">
+                    </div>
+                    <div class="flex gap-2 flex-wrap">
+                        <select id="yearFilter" onchange="app.applyFilters()" class="px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-slate-900 focus:ring-2 focus:ring-mycelium-500">
+                            <option value="">All Years</option>
+                        </select>
+                        <select id="materialFilter" onchange="app.applyFilters()" class="px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-slate-900 focus:ring-2 focus:ring-mycelium-500">
+                            <option value="">All Materials</option>
+                        </select>
+                        <button onclick="app.resetFilters()" class="px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors" title="Reset Filters">
+                            <i class="fas fa-undo"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="mt-3 flex items-center justify-between text-sm">
+                    <span class="text-gray-500 dark:text-gray-400">
+                        Showing <span id="showingCount" class="font-semibold text-mycelium-600">0</span> of <span id="totalCount" class="font-semibold">0</span> results
+                    </span>
+                    <div class="flex gap-2">
+                        <button onclick="app.downloadOriginal()" class="text-mycelium-600 hover:text-mycelium-700 font-medium flex items-center gap-2">
+                            <i class="fas fa-download"></i> Original File
+                        </button>
+                        <button onclick="app.downloadFiltered()" class="text-mycelium-600 hover:text-mycelium-700 font-medium flex items-center gap-2">
+                            <i class="fas fa-file-export"></i> Export Filtered
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Table -->
+        <div id="tableSection" class="hidden bg-white dark:bg-slate-800 rounded-xl shadow-sm overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-gray-50 dark:bg-slate-900/50 sticky top-0">
+                        <tr>
+                            <th class="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider w-12">
+                                <input type="checkbox" id="selectAll" class="custom-checkbox" onchange="app.toggleSelectAll()">
+                            </th>
+                            <th onclick="app.sort('title')" class="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors group">
+                                <div class="flex items-center gap-2">
+                                    Title
+                                    <i class="fas fa-sort sort-icon text-gray-300 group-hover:text-gray-500"></i>
+                                </div>
+                            </th>
+                            <th onclick="app.sort('authors')" class="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors group">
+                                <div class="flex items-center gap-2">
+                                    Authors
+                                    <i class="fas fa-sort sort-icon text-gray-300 group-hover:text-gray-500"></i>
+                                </div>
+                            </th>
+                            <th onclick="app.sort('year')" class="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors group w-24">
+                                <div class="flex items-center gap-2">
+                                    Year
+                                    <i class="fas fa-sort sort-icon text-gray-300 group-hover:text-gray-500"></i>
+                                </div>
+                            </th>
+                            <th onclick="app.sort('materialType')" class="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors group">
+                                <div class="flex items-center gap-2">
+                                    Material Type
+                                    <i class="fas fa-sort sort-icon text-gray-300 group-hover:text-gray-500"></i>
+                                </div>
+                            </th>
+                            <th class="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider w-24">
+                                Actions
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody" class="divide-y divide-gray-100 dark:divide-gray-700">
+                        <!-- Rows injected by JS -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Pagination -->
+            <div class="bg-gray-50 dark:bg-slate-900/50 px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <span class="text-sm text-gray-500 dark:text-gray-400">Rows per page:</span>
+                    <select id="rowsPerPage" onchange="app.changeRowsPerPage(this.value)" class="rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm">
+                        <option value="10">10</option>
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="app.prevPage()" id="prevBtn" class="px-3 py-1 rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <span class="text-sm text-gray-600 dark:text-gray-400">
+                        Page <span id="currentPage" class="font-semibold">1</span> of <span id="totalPages" class="font-semibold">1</span>
+                    </span>
+                    <button onclick="app.nextPage()" id="nextBtn" class="px-3 py-1 rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Empty State -->
+        <div id="emptyState" class="hidden text-center py-12">
+            <div class="w-16 h-16 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                <i class="fas fa-search text-gray-400 text-2xl"></i>
+            </div>
+            <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">No results found</h3>
+            <p class="text-gray-500 dark:text-gray-400">Try adjusting your search or filters</p>
+        </div>
+    </main>
+
+    <!-- Detail Modal -->
+    <div id="detailModal" class="fixed inset-0 z-50 hidden">
+        <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="app.closeModal()"></div>
+        <div class="absolute inset-0 flex items-center justify-center p-4 pointer-events-none">
+            <div class="glass w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl pointer-events-auto animate-fade-in">
+                <div class="sticky top-0 bg-white/80 dark:bg-slate-800/80 backdrop-blur border-b border-gray-100 dark:border-gray-700 px-6 py-4 flex justify-between items-center">
+                    <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100">Research Details</h2>
+                    <button onclick="app.closeModal()" class="w-8 h-8 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center justify-center transition-colors">
+                        <i class="fas fa-times text-gray-500"></i>
+                    </button>
+                </div>
+                <div id="modalContent" class="p-6 space-y-6">
+                    <!-- Content injected by JS -->
+                </div>
+                <div class="border-t border-gray-100 dark:border-gray-700 px-6 py-4 bg-gray-50/50 dark:bg-slate-900/30 flex justify-end gap-3">
+                    <button onclick="app.closeModal()" class="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors">
+                        Close
+                    </button>
+                    <button onclick="app.downloadCurrentRecord()" class="px-4 py-2 rounded-lg bg-mycelium-600 hover:bg-mycelium-700 text-white transition-colors flex items-center gap-2">
+                        <i class="fas fa-download"></i> Download Record
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-4 right-4 z-50 transform translate-y-20 opacity-0 transition-all duration-300">
+        <div class="bg-gray-800 dark:bg-white text-white dark:text-gray-900 px-6 py-3 rounded-lg shadow-lg flex items-center gap-3">
+            <i id="toastIcon" class="fas fa-check-circle text-mycelium-400 dark:text-mycelium-600"></i>
+            <span id="toastMessage" class="font-medium">Operation successful</span>
+        </div>
+    </div>
+
+    <script>
+        // Application State
+        const app = {
+            data: [],
+            filteredData: [],
+            currentPage: 1,
+            rowsPerPage: 10,
+            sortColumn: null,
+            sortDirection: 'asc',
+            searchTerm: '',
+            selectedRows: new Set(),
+            currentRecord: null,
+            originalFile: null,
+            
+            // Initialize
+            init() {
+                this.loadFromStorage();
+                this.setupDragAndDrop();
+                this.setupTheme();
+                
+                // Check for saved data
+                if (this.data.length > 0) {
+                    this.showDataView();
+                    this.updateStats();
+                    this.populateFilters();
+                    this.renderTable();
+                }
+            },
+
+            // Theme Management
+            setupTheme() {
+                const savedTheme = localStorage.getItem('theme') || 'light';
+                document.documentElement.setAttribute('data-theme', savedTheme);
+                if (savedTheme === 'dark') {
+                    document.documentElement.classList.add('dark');
+                }
+            },
+
+            toggleTheme() {
+                const html = document.documentElement;
+                const currentTheme = html.getAttribute('data-theme');
+                const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+                
+                html.setAttribute('data-theme', newTheme);
+                localStorage.setItem('theme', newTheme);
+                
+                if (newTheme === 'dark') {
+                    html.classList.add('dark');
+                } else {
+                    html.classList.remove('dark');
+                }
+            },
+
+            // Drag and Drop
+            setupDragAndDrop() {
+                const zone = document.getElementById('uploadZone');
+                
+                ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                    zone.addEventListener(eventName, (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    });
+                });
+
+                ['dragenter', 'dragover'].forEach(eventName => {
+                    zone.addEventListener(eventName, () => {
+                        zone.classList.add('dragover');
+                    });
+                });
+
+                ['dragleave', 'drop'].forEach(eventName => {
+                    zone.addEventListener(eventName, () => {
+                        zone.classList.remove('dragover');
+                    });
+                });
+
+                zone.addEventListener('drop', (e) => {
+                    const files = e.dataTransfer.files;
+                    if (files.length) {
+                        this.processFile(files[0]);
+                    }
+                });
+
+                zone.addEventListener('click', () => {
+                    document.getElementById('fileInput').click();
+                });
+            },
+
+            // File Upload
+            handleFileUpload(event) {
+                const file = event.target.files[0];
+                if (file) {
+                    this.processFile(file);
+                }
+            },
+
+            processFile(file) {
+                // Store original file for download
+                this.originalFile = file;
+                
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                        const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+                        
+                        if (jsonData.length < 2) {
+                            throw new Error('File appears to be empty or missing headers');
+                        }
+                        
+                        this.parseData(jsonData);
+                        this.showToast('File uploaded successfully!', 'success');
+                    } catch (error) {
+                        this.showToast('Error parsing file: ' + error.message, 'error');
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            },
+
+            parseData(rawData) {
+                const headers = rawData[0].map(h => h.toString().toLowerCase().trim());
+                const rows = rawData.slice(1);
+                
+                this.data = rows.map((row, index) => {
+                    const obj = { id: index + 1, selected: false };
+                    headers.forEach((header, i) => {
+                        const key = this.normalizeHeader(header);
+                        obj[key] = row[i] || '';
+                    });
+                    return obj;
+                }).filter(row => row.title || row.paperTitle); // Filter out empty rows
+                
+                // Normalize field names
+                this.data = this.data.map(row => ({
+                    id: row.id,
+                    title: row.title || row.papertitle || row.paper_title || 'Untitled',
+                    authors: row.authors || row.author || 'Unknown',
+                    year: parseInt(row.year) || new Date().getFullYear(),
+                    materialType: row.materialtype || row.material_type || row.material || 'Unspecified',
+                    properties: row.properties || row.mechanical || row.thermal || '',
+                    source: row.source || row.doi || row.link || '',
+                    notes: row.notes || row.comments || '',
+                    keywords: row.keywords || ''
+                }));
+                
+                this.filteredData = [...this.data];
+                this.saveToStorage();
+                this.showDataView();
+                this.updateStats();
+                this.populateFilters();
+                this.renderTable();
+            },
+
+            normalizeHeader(header) {
+                return header.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+            },
+
+            // Storage
+            saveToStorage() {
+                localStorage.setItem('myceliumData', JSON.stringify(this.data));
+                if (this.originalFile) {
+                    // Store file metadata since we can't store the file itself
+                    localStorage.setItem('originalFileName', this.originalFile.name);
+                }
+            },
+
+            loadFromStorage() {
+                const saved = localStorage.getItem('myceliumData');
+                if (saved) {
+                    try {
+                        this.data = JSON.parse(saved);
+                        this.filteredData = [...this.data];
+                    } catch (e) {
+                        console.error('Error loading saved data:', e);
+                    }
+                }
+            },
+
+            // UI Updates
+            showDataView() {
+                document.getElementById('uploadZone').classList.add('hidden');
+                document.getElementById('controlsSection').classList.remove('hidden');
+                document.getElementById('tableSection').classList.remove('hidden');
+            },
+
+            updateStats() {
+                document.getElementById('totalRecords').textContent = this.data.length;
+                
+                // Unique authors
+                const authors = new Set();
+                this.data.forEach(row => {
+                    if (row.authors) {
+                        row.authors.split(/[;,]/).forEach(a => authors.add(a.trim()));
+                    }
+                });
+                document.getElementById('uniqueAuthors').textContent = authors.size;
+                
+                // Year range
+                const years = this.data.map(r => r.year).filter(y => y);
+                if (years.length) {
+                    const min = Math.min(...years);
+                    const max = Math.max(...years);
+                    document.getElementById('yearRange').textContent = min === max ? min : `${min}-${max}`;
+                }
+            },
+
+            populateFilters() {
+                // Year filter
+                const years = [...new Set(this.data.map(r => r.year))].filter(y => y).sort((a, b) => b - a);
+                const yearSelect = document.getElementById('yearFilter');
+                yearSelect.innerHTML = '<option value="">All Years</option>' + 
+                    years.map(y => `<option value="${y}">${y}</option>`).join('');
+                
+                // Material filter
+                const materials = [...new Set(this.data.map(r => r.materialType))].filter(m => m).sort();
+                const materialSelect = document.getElementById('materialFilter');
+                materialSelect.innerHTML = '<option value="">All Materials</option>' + 
+                    materials.map(m => `<option value="${m}">${m}</option>`).join('');
+            },
+
+            // Search and Filter
+            handleSearch(term) {
+                this.searchTerm = term.toLowerCase();
+                this.applyFilters();
+            },
+
+            applyFilters() {
+                const yearFilter = document.getElementById('yearFilter').value;
+                const materialFilter = document.getElementById('materialFilter').value;
+                
+                this.filteredData = this.data.filter(row => {
+                    // Search term
+                    if (this.searchTerm) {
+                        const searchable = `${row.title} ${row.authors} ${row.keywords} ${row.notes}`.toLowerCase();
+                        if (!searchable.includes(this.searchTerm)) return false;
+                    }
+                    
+                    // Year filter
+                    if (yearFilter && row.year.toString() !== yearFilter) return false;
+                    
+                    // Material filter
+                    if (materialFilter && row.materialType !== materialFilter) return false;
+                    
+                    return true;
+                });
+                
+                this.currentPage = 1;
+                this.renderTable();
+                this.updateResultCount();
+            },
+
+            resetFilters() {
+                document.getElementById('searchInput').value = '';
+                document.getElementById('yearFilter').value = '';
+                document.getElementById('materialFilter').value = '';
+                this.searchTerm = '';
+                this.filteredData = [...this.data];
+                this.currentPage = 1;
+                this.renderTable();
+                this.updateResultCount();
+            },
+
+            updateResultCount() {
+                document.getElementById('showingCount').textContent = this.filteredData.length;
+                document.getElementById('totalCount').textContent = this.data.length;
+                
+                const emptyState = document.getElementById('emptyState');
+                const tableSection = document.getElementById('tableSection');
+                
+                if (this.filteredData.length === 0) {
+                    emptyState.classList.remove('hidden');
+                    tableSection.classList.add('hidden');
+                } else {
+                    emptyState.classList.add('hidden');
+                    tableSection.classList.remove('hidden');
+                }
+            },
+
+            // Sorting
+            sort(column) {
+                if (this.sortColumn === column) {
+                    this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+                } else {
+                    this.sortColumn = column;
+                    this.sortDirection = 'asc';
+                }
+                
+                // Update UI indicators
+                document.querySelectorAll('th').forEach(th => {
+                    th.classList.remove('sort-asc', 'sort-desc');
+                });
+                
+                const th = document.querySelector(`th[onclick="app.sort('${column}')"]`);
+                if (th) {
+                    th.classList.add(this.sortDirection === 'asc' ? 'sort-asc' : 'sort-desc');
+                }
+                
+                // Sort data
+                this.filteredData.sort((a, b) => {
+                    let valA = a[column] || '';
+                    let valB = b[column] || '';
+                    
+                    if (typeof valA === 'string') valA = valA.toLowerCase();
+                    if (typeof valB === 'string') valB = valB.toLowerCase();
+                    
+                    if (valA < valB) return this.sortDirection === 'asc' ? -1 : 1;
+                    if (valA > valB) return this.sortDirection === 'asc' ? 1 : -1;
+                    return 0;
+                });
+                
+                this.renderTable();
+            },
+
+            // Pagination
+            changeRowsPerPage(value) {
+                this.rowsPerPage = parseInt(value);
+                this.currentPage = 1;
+                this.renderTable();
+            },
+
+            prevPage() {
+                if (this.currentPage > 1) {
+                    this.currentPage--;
+                    this.renderTable();
+                }
+            },
+
+            nextPage() {
+                const maxPage = Math.ceil(this.filteredData.length / this.rowsPerPage);
+                if (this.currentPage < maxPage) {
+                    this.currentPage++;
+                    this.renderTable();
+                }
+            },
+
+            // Table Rendering
+            renderTable() {
+                const tbody = document.getElementById('tableBody');
+                const start = (this.currentPage - 1) * this.rowsPerPage;
+                const end = start + this.rowsPerPage;
+                const pageData = this.filteredData.slice(start, end);
+                
+                tbody.innerHTML = pageData.map(row => {
+                    const titleHighlighted = this.highlightText(row.title, this.searchTerm);
+                    const authorsHighlighted = this.highlightText(row.authors, this.searchTerm);
+                    
+                    return `
+                        <tr class="table-row border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-slate-800/50 animate-fade-in">
+                            <td class="px-6 py-4">
+                                <input type="checkbox" class="custom-checkbox" 
+                                    ${this.selectedRows.has(row.id) ? 'checked' : ''} 
+                                    onchange="app.toggleRowSelection(${row.id})">
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="font-medium text-gray-900 dark:text-gray-100">${titleHighlighted}</div>
+                                ${row.keywords ? `<div class="text-xs text-gray-500 mt-1 flex gap-1 flex-wrap">${row.keywords.split(/[,;]/).map(k => `<span class="bg-gray-100 dark:bg-slate-700 px-2 py-0.5 rounded">${k.trim()}</span>`).join('')}</div>` : ''}
+                            </td>
+                            <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">${authorsHighlighted}</td>
+                            <td class="px-6 py-4">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-mycelium-100 text-mycelium-800 dark:bg-mycelium-900/30 dark:text-mycelium-300">
+                                    ${row.year}
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">${row.materialType}</td>
+                            <td class="px-6 py-4">
+                                <button onclick="app.viewDetails(${row.id})" class="text-mycelium-600 hover:text-mycelium-700 font-medium text-sm flex items-center gap-1">
+                                    View <i class="fas fa-arrow-right text-xs"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+                
+                // Update pagination controls
+                const totalPages = Math.ceil(this.filteredData.length / this.rowsPerPage) || 1;
+                document.getElementById('currentPage').textContent = this.currentPage;
+                document.getElementById('totalPages').textContent = totalPages;
+                document.getElementById('prevBtn').disabled = this.currentPage === 1;
+                document.getElementById('nextBtn').disabled = this.currentPage >= totalPages;
+                
+                // Update select all checkbox
+                const selectAll = document.getElementById('selectAll');
+                const visibleIds = pageData.map(r => r.id);
+                const allSelected = visibleIds.length > 0 && visibleIds.every(id => this.selectedRows.has(id));
+                selectAll.checked = allSelected;
+                
+                this.updateResultCount();
+            },
+
+            highlightText(text, term) {
+                if (!term || !text) return text;
+                const regex = new RegExp(`(${term})`, 'gi');
+                return text.replace(regex, '<span class="highlight-match">$1</span>');
+            },
+
+            // Selection
+            toggleRowSelection(id) {
+                if (this.selectedRows.has(id)) {
+                    this.selectedRows.delete(id);
+                } else {
+                    this.selectedRows.add(id);
+                }
+                this.renderTable();
+            },
+
+            toggleSelectAll() {
+                const start = (this.currentPage - 1) * this.rowsPerPage;
+                const end = start + this.rowsPerPage;
+                const pageIds = this.filteredData.slice(start, end).map(r => r.id);
+                const allSelected = pageIds.every(id => this.selectedRows.has(id));
+                
+                if (allSelected) {
+                    pageIds.forEach(id => this.selectedRows.delete(id));
+                } else {
+                    pageIds.forEach(id => this.selectedRows.add(id));
+                }
+                
+                this.renderTable();
+            },
+
+            // Modal
+            viewDetails(id) {
+                const record = this.data.find(r => r.id === id);
+                if (!record) return;
+                
+                this.currentRecord = record;
+                const modal = document.getElementById('detailModal');
+                const content = document.getElementById('modalContent');
+                
+                content.innerHTML = `
+                    <div class="space-y-6">
+                        <div>
+                            <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Title</label>
+                            <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mt-1">${record.title}</h3>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Authors</label>
+                                <p class="text-gray-700 dark:text-gray-300 mt-1">${record.authors}</p>
+                            </div>
+                            <div>
+                                <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Year</label>
+                                <p class="text-gray-700 dark:text-gray-300 mt-1">${record.year}</p>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Material Type</label>
+                            <p class="text-gray-700 dark:text-gray-300 mt-1">${record.materialType}</p>
+                        </div>
+                        
+                        ${record.properties ? `
+                        <div>
+                            <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Properties</label>
+                            <div class="mt-2 p-4 bg-gray-50 dark:bg-slate-900/50 rounded-lg">
+                                <p class="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">${record.properties}</p>
+                            </div>
+                        </div>
+                        ` : ''}
+                        
+                        ${record.source ? `
+                        <div>
+                            <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Source / DOI</label>
+                            <a href="${record.source.startsWith('http') ? record.source : 'https://doi.org/' + record.source}" 
+                               target="_blank" 
+                               class="text-mycelium-600 hover:text-mycelium-700 mt-1 block break-all">
+                                ${record.source} <i class="fas fa-external-link-alt text-xs ml-1"></i>
+                            </a>
+                        </div>
+                        ` : ''}
+                        
+                        ${record.notes ? `
+                        <div>
+                            <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Notes</label>
+                            <div class="mt-2 p-4 bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-400 rounded-r-lg">
+                                <p class="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">${record.notes}</p>
+                            </div>
+                        </div>
+                        ` : ''}
+                        
+                        ${record.keywords ? `
+                        <div>
+                            <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Keywords</label>
+                            <div class="flex gap-2 mt-2 flex-wrap">
+                                ${record.keywords.split(/[,;]/).map(k => `
+                                    <span class="px-3 py-1 bg-mycelium-100 dark:bg-mycelium-900/30 text-mycelium-800 dark:text-mycelium-300 rounded-full text-sm">
+                                        ${k.trim()}
+                                    </span>
+                                `).join('')}
+                            </div>
+                        </div>
+                        ` : ''}
+                    </div>
+                `;
+                
+                modal.classList.remove('hidden');
+                document.body.style.overflow = 'hidden';
+            },
+
+            closeModal() {
+                document.getElementById('detailModal').classList.add('hidden');
+                document.body.style.overflow = '';
+                this.currentRecord = null;
+            },
+
+            // Downloads
+            downloadOriginal() {
+                if (this.originalFile) {
+                    const url = URL.createObjectURL(this.originalFile);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = this.originalFile.name;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    this.showToast('Original file downloaded', 'success');
+                } else {
+                    // If no file stored, export current data as original format
+                    this.exportToExcel(this.data, 'mycelium_data_original.xlsx');
+                }
+            },
+
+            downloadFiltered() {
+                const dataToExport = this.selectedRows.size > 0 
+                    ? this.data.filter(r => this.selectedRows.has(r.id))
+                    : this.filteredData;
+                
+                if (dataToExport.length === 0) {
+                    this.showToast('No data to export', 'error');
+                    return;
+                }
+                
+                this.exportToExcel(dataToExport, `mycelium_filtered_${new Date().toISOString().split('T')[0]}.xlsx`);
+                this.showToast(`Exported ${dataToExport.length} records`, 'success');
+            },
+
+            downloadCurrentRecord() {
+                if (!this.currentRecord) return;
+                this.exportToExcel([this.currentRecord], `record_${this.currentRecord.id}.xlsx`);
+                this.showToast('Record downloaded', 'success');
+            },
+
+            exportToExcel(data, filename) {
+                const worksheet = XLSX.utils.json_to_sheet(data.map(({id, selected, ...rest}) => rest));
+                const workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, worksheet, 'Data');
+                XLSX.writeFile(workbook, filename);
+            },
+
+            // Toast
+            showToast(message, type = 'success') {
+                const toast = document.getElementById('toast');
+                const icon = document.getElementById('toastIcon');
+                const msg = document.getElementById('toastMessage');
+                
+                msg.textContent = message;
+                icon.className = type === 'success' 
+                    ? 'fas fa-check-circle text-mycelium-400 dark:text-mycelium-600'
+                    : 'fas fa-exclamation-circle text-red-400';
+                
+                toast.classList.remove('translate-y-20', 'opacity-0');
+                
+                setTimeout(() => {
+                    toast.classList.add('translate-y-20', 'opacity-0');
+                }, 3000);
+            }
+        };
+
+        // Initialize app when DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            app.init();
+        });
+
+        // Close modal on escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                app.closeModal();
+            }
+        });
+    </script>
+</body>
+</html>
